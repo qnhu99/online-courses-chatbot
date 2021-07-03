@@ -87,8 +87,6 @@ function getGetStartedMessage() {
     }
 }
 
-
-
 function handleGetStarted(sender_psid) {
     return new Promise(async (resolve, reject) => {
         try {
@@ -162,6 +160,25 @@ function getResponseFromCourses(courses) {
                 ))
             }
         }
+    });
+}
+
+function getSearchedCourses(searchKeyWords) {
+    return new Promise(resolve => {
+        const url = `${API_DOMAIN}/api/courses/search`;
+
+        request({
+            "uri": url,
+            "qs": { "query": searchKeyWords },
+            "method": "GET",
+        }, (err, res, body) => {
+            body = JSON.parse(body);
+            let result = [body?.data, err];
+            if (!result[0]) {
+                result[0] = [];
+            }
+            resolve(result);
+        });
     });
 }
 

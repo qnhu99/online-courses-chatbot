@@ -114,9 +114,6 @@ async function handlePostback(sender_psid, received_postback) {
     case 'RESTART_BOT':
       response = await chatbotService.handleGetStarted(sender_psid);
       return;
-    case 'BROWSE_MOST_VIEW_COURSE':
-      response = await chatbotService.handleBrowseMostViewCourses(sender_psid);
-      return;
     case 'FIND_COURSE':
       response = { text: `Bạn vui lòng nhập từ khóa muốn tìm theo dạng:\nsearch: <Từ khóa>` };
       break;
