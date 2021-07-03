@@ -1,175 +1,285 @@
 import dotenv from 'dotenv';
 import request from "request";
-import chatbotService from '../services/chatbot.service';
 
 dotenv.config();
 
 const { PAGE_ACCESS_TOKEN, API_DOMAIN, WEB_DOMAIN, INTERNAL_ERROR_MESSAGE } = process.env;
 
-//process.env.NAME_VARIABLES
-export function getHomePage(req, res) {
-    return res.render('homepage.ejs');
-};
 
-export function postWebhook(req, res) {
-    let body = req.body;
+function testUrl(url) {
+    const urlExpression = /((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)/;
 
-    // Checks this is an event from a page subscription
-    if (body.object === 'page') {
-
-        // Iterates over each entry - there may be multiple if batched
-        body.entry.forEach(function (entry) {
-
-            // Gets the body of the webhook event
-            let webhook_event = entry.messaging[0];
-            console.log(webhook_event);
-
-
-            // Get the sender PSID
-            let sender_psid = webhook_event.sender.id;
-            console.log('Sender PSID: ' + sender_psid);
-
-            // Check if the event is a message or postback and
-            // pass the event to the appropriate handler function
-            if (webhook_event.message) {
-                handleMessage(sender_psid, webhook_event.message);
-            } else if (webhook_event.postback) {
-                handlePostback(sender_psid, webhook_event.postback);
-            }
-        });
-
-        // Returns a '200 OK' response to all requests
-        res.status(200).send('EVENT_RECEIVED');
-    } else {
-        // Returns a '404 Not Found' if event is not from a page subscription
-        res.sendStatus(404);
-    }
+    return urlExpression.test(url);
 }
 
-export function getWebhook(req, res) {
-
-    // Your verify token. Should be a random string.
-    let VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
-    // Parse the query params
-    let mode = req.query['hub.mode'];
-    let token = req.query['hub.verify_token'];
-    let challenge = req.query['hub.challenge'];
-
-    // Checks if a token and mode is in the query string of the request
-    if (mode && token) {
-
-        // Checks the mode and token sent is correct
-        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-
-            // Responds with the challenge token from the request
-            console.log('WEBHOOK_VERIFIED');
-            res.status(200).send(challenge);
-
-        } else {
-            // Responds with '403 Forbidden' if verify tokens do not match
-            res.sendStatus(403);
-        }
-    }
-}
-
-// Handles messages events
-function handleMessage(sender_psid, received_message) {
-    // Checks if the message contains text
-    if (received_message.text) {
-        // Create the payload for a basic text message, which
-        // will be added to the body of our request to the Send API
-        let text = received_message.text.trim();
-        let startsWith = text.substring(0, 7);
-
-        if (startsWith.toLowerCase() === "search:") {
-            let searchKeyWords = text.substring(7).trim();
-            if (searchKeyWords.length > 0) {
-                chatbotService.handleSearchCourses(sender_psid, searchKeyWords);
-            } else {
-                let response = {
-                    "text": `Từ khóa tìm kiếm không thể là rỗng 😅`
-                }
-                chatbotService.callSendAPI(sender_psid, response);
-            }
-        } else {
-            let response = {
-                "text": `Bạn vừa gửi mình tin nhắn "${received_message.text}", nhưng mình chưa biết phải làm gì T_T.`
-            }
-            chatbotService.callSendAPI(sender_psid, response);
-        }
-    }
-}
-
-// Handles messaging_postbacks events
-async function handlePostback(sender_psid, received_postback) {
-    let response;
-
-    // Get the payload for the postback
-    let payload = JSON.parse(received_postback.payload);
-
-    // Set the response based on the postback payload
-    switch (payload.type) {
-        case 'GET_STARTED':
-        case 'RESTART_BOT':
-            response = await chatbotService.handleGetStarted(sender_psid);
-            return;
-        case 'BROWSE_MOST_VIEW_COURSE':
-            response = await chatbotService.handleBrowseMostViewCourses(sender_psid);
-            return;
-        case 'FIND_COURSE':
-            response = { text: `Bạn vui lòng nhập từ khóa muốn tìm theo dạng:\nsearch: <Từ khóa>` };
-            break;
-        case 'BROWSE_BY_CATEGORIES':
-            response = await chatbotService.handleBrowseByCategories(sender_psid, payload.categoryId, payload.categoryRank);
-            return;
-        default:
-            response = { text: `Mình chưa biết phản hồi lệnh '${payload}' này của bạn 😭😭😭.` };
-            break;
-    }
-
-    // Send the message to acknowledge the postback
-    chatbotService.callSendAPI(sender_psid, response);
-}
-
-export async function setupProfile(req, res) {
-    const request_body = {
-        "get_started": {
-            payload: JSON.stringify({ type: "GET_STARTED" })
+// Sends response messages via the Send API
+function callSendAPI(sender_psid, response) {
+    // Construct the message body
+    let request_body = {
+        "recipient": {
+            "id": sender_psid
         },
-        "whitelisted_domains": ["https://git.heroku.com/online-courses-chatbot.git"],
-        "persistent_menu": [
-            {
-                "locale": "default",
-                "composer_input_disabled": false,
-                "call_to_actions": [
-                    {
-                        "type": "web_url",
-                        "title": "Đến trang web",
-                        "url": WEB_DOMAIN,
-                        "webview_height_ratio": "full"
-                    },
-                    {
-                        "type": "postback",
-                        "title": "Khởi động lại chatbot",
-                        "payload": JSON.stringify({ type: "RESTART_BOT" })
-                    }
-                ]
-            }
-        ]
-    };
+        "message": response
+    }
 
+    // Send the HTTP request to the Messenger Platform
     request({
-        "uri": `https://graph.facebook.com/v11.0/me/messenger_profile?access_token=${PAGE_ACCESS_TOKEN}`,
+        "uri": "https://graph.facebook.com/v2.6/me/messages",
         "qs": { "access_token": PAGE_ACCESS_TOKEN },
         "method": "POST",
         "json": request_body
-    }, (err, noNeedRes, body) => {
-        res.send(body);
+    }, (err, res, body) => {
         if (!err) {
-            console.log('Setup FB user profile SUCCESS');
+            console.log(">> ~ file: chatbot.service.js ~ line 26 ~ callSendAPI ~ body", body);
+            console.log('message sent!')
         } else {
-            console.error("Setup FB user profile FAIL:" + err);
+            console.error("Unable to send message:" + err);
         }
     });
+}
+
+function getPersonProfile(sender_psid) {
+    return new Promise(async (resolve) => {
+        request({
+            uri: `https://graph.facebook.com/${sender_psid}?fields=first_name,last_name,profile_pic&access_token=${PAGE_ACCESS_TOKEN}`,
+            "method": "GET",
+        }, (err, res, body) => {
+            resolve(JSON.parse(body));
+        });
+    });
+}
+
+function getGetStartedMessage() {
+    return {
+        "attachment": {
+            "type": "template",
+            "payload": {
+                "template_type": "generic",
+                "elements": [
+                    {
+                        "title": "Chào mừng bạn đến với online course fanpage",
+                        "image_url": "https://www.jtinetwork.com/wp-content/uploads/2020/07/courseintroimage-1024x576.jpg",
+                        "subtitle": "Ut ea sint nostrud culpa esse consequat adipisicing labore dolor pariatur ex quis.",
+                        "default_action": {
+                            "type": "web_url",
+                            "url": WEB_DOMAIN,
+                            "webview_height_ratio": "tall",
+                        },
+                        "buttons": [
+                            {
+                                "type": "postback",
+                                "title": "Tìm kiếm khóa học",
+                                "payload": JSON.stringify({ type: "FIND_COURSE" })
+                            }, {
+                                "type": "postback",
+                                "title": "Xem nhiều nhất",
+                                "payload": JSON.stringify({ type: "BROWSE_MOST_VIEW_COURSE" })
+                            }, {
+                                "type": "postback",
+                                "title": "Xem theo thể loại",
+                                "payload": JSON.stringify({ type: "BROWSE_BY_CATEGORIES" })
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+}
+
+
+
+function handleGetStarted(sender_psid) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const personProfile = await getPersonProfile(sender_psid);
+
+
+            await callSendAPI(sender_psid, getGetStartedMessage());
+
+            resolve('success');
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+function getCategories(categoryId) {
+    return new Promise((resolve) => {
+        const url = `${API_DOMAIN}/api/categories/${categoryId ? categoryId : ''}`;
+
+        request({
+            "uri": url,
+            "qs": { "limit": 50 },
+            "method": "GET",
+        }, (err, res, body) => {
+            body = JSON.parse(body);
+            let result = [categoryId ? body?.data?.categories : body?.data?.rows, err];
+            if (!result[0]) {
+                result[0] = [];
+            }
+            resolve(result);
+        });
+    });
+}
+
+function getCoursesByCategoryId(categoryId) {
+    return new Promise((resolve) => {
+        const url = `${API_DOMAIN}/api/courses`;
+
+        request({
+            "uri": url,
+            "qs": { "categoryId": categoryId },
+            "method": "GET",
+        }, (err, res, body) => {
+            body = JSON.parse(body);
+            let result = [body?.data?.rows, err];
+            if (!result[0]) {
+                result[0] = [];
+            }
+            resolve(result);
+        });
+    });
+}
+
+function getResponseFromCourses(courses) {
+    return JSON.stringify({
+        "attachment": {
+            "type": "template",
+            "payload": {
+                "template_type": "generic",
+                "elements": courses.map(item => (
+                    {
+                        "title": item.course_name,
+                        "image_url": testUrl(item.picture) ? item.picture : "https://www.classcentral.com/report/wp-content/uploads/2020/06/top-100-course-pandemic.png",
+                        "subtitle": `${item.short_description}\nRating: ${item.rating}\nNumber enrolled: ${item.number_enrolled}`,
+                        "default_action": {
+                            "type": "web_url",
+                            "url": WEB_DOMAIN,
+                            "webview_height_ratio": "tall",
+                        },
+                    }
+                ))
+            }
+        }
+    });
+}
+
+function handleBrowseByCategories(sender_psid, categoryId, categoryRank) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let response;
+
+            if (categoryRank === 2) {
+                const [courses, coursesErr] = await getCoursesByCategoryId(categoryId);
+
+                if (coursesErr) {
+                    response = {
+                        "text": INTERNAL_ERROR_MESSAGE
+                    }
+                } else if (courses.length === 0) {
+                    response = {
+                        "text": "Không có khóa học để hiển thị T_T"
+                    }
+                } else {
+                    response = getResponseFromCourses(courses);
+                }
+            } else {
+                const [categories, categoriesErr] = await getCategories(categoryId);
+
+                if (categoriesErr) {
+                    response = {
+                        "text": INTERNAL_ERROR_MESSAGE
+                    }
+                } else if (categories.length === 0) {
+                    response = {
+                        "text": "Không có thể loại con để hiển thị T_T"
+                    }
+                } else {
+                    let elements = [];
+                    let el;
+                    categories.forEach(item => {
+                        if (!el) {
+                            el = {
+                                "title": "Xem theo thể loại",
+                                "image_url": "https://www.jtinetwork.com/wp-content/uploads/2020/07/courseintroimage-1024x576.jpg",
+                                "subtitle": "Anim tempor consectetur qui nisi nulla elit.",
+                                "default_action": {
+                                    "type": "web_url",
+                                    "url": WEB_DOMAIN,
+                                    "webview_height_ratio": "tall",
+                                },
+                                "buttons": []
+                            }
+                            elements.push(el);
+                        };
+                        el.buttons.push({
+                            type: "postback",
+                            title: item.category_name,
+                            payload: JSON.stringify(
+                                {
+                                    type: "BROWSE_BY_CATEGORIES",
+                                    categoryId: item.id,
+                                    categoryRank: item.parentId === null ? 1 : 2
+                                }
+                            )
+                        });
+                        if (el.buttons.length === 3) {
+                            el = null;
+                        }
+                    });
+
+                    response = JSON.stringify({
+                        "attachment": {
+                            "type": "template",
+                            "payload": {
+                                "template_type": "generic",
+                                "elements": elements
+                            }
+                        }
+                    });
+                }
+            }
+
+            await callSendAPI(sender_psid, response);
+            resolve('success');
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+function handleSearchCourses(sender_psid, searchKeyWords) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const [courses, coursesErr] = await getSearchedCourses(searchKeyWords);
+
+            let response;
+            if (coursesErr) {
+                response = {
+                    "text": INTERNAL_ERROR_MESSAGE
+                }
+            } else if (courses.length === 0) {
+                response = {
+                    "text": "Không có khóa học để hiển thị T_T"
+                }
+            } else {
+                response = getResponseFromCourses(courses);
+            }
+
+            await callSendAPI(sender_psid, response);
+
+            resolve('success');
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+export default {
+    handleGetStarted,
+    callSendAPI,
+    handleBrowseByCategories,
+    handleBrowseMostViewCourses,
+    handleSearchCourses,
 }
