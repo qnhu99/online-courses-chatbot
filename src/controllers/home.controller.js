@@ -297,6 +297,6 @@ export default {
     handleGetStarted,
     callSendAPI,
     handleBrowseByCategories,
-    handleBrowseMostViewCourses,
+    // handleBrowseMostViewCourses,
     handleSearchCourses,
 }
