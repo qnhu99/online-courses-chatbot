@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import request from "request";
-import chatbotService from '../services/chatbot.service';
+import homeController from '../controllers/home.controller';
 
 dotenv.config();
 
@@ -85,18 +85,18 @@ function handleMessage(sender_psid, received_message) {
     if (startsWith.toLowerCase() === "search:") {
       let searchKeyWords = text.substring(7).trim();
       if (searchKeyWords.length > 0) {
-        chatbotService.handleSearchCourses(sender_psid, searchKeyWords);
+        homeController.handleSearchCourses(sender_psid, searchKeyWords);
       } else {
         let response = {
           "text": `Từ khóa tìm kiếm không thể là rỗng 😅`
         }
-        chatbotService.callSendAPI(sender_psid, response);
+        homeController.callSendAPI(sender_psid, response);
       }
     } else {
       let response = {
         "text": `Bạn vừa gửi mình tin nhắn "${received_message.text}", nhưng mình chưa biết phải làm gì T_T.`
       }
-      chatbotService.callSendAPI(sender_psid, response);
+      homeController.callSendAPI(sender_psid, response);
     }
   }
 }
@@ -112,13 +112,13 @@ async function handlePostback(sender_psid, received_postback) {
   switch (payload.type) {
     case 'GET_STARTED':
     case 'RESTART_BOT':
-      response = await chatbotService.handleGetStarted(sender_psid);
+      response = await homeController.handleGetStarted(sender_psid);
       return;
     case 'FIND_COURSE':
       response = { text: `Bạn vui lòng nhập từ khóa muốn tìm theo dạng:\nsearch: <Từ khóa>` };
       break;
     case 'BROWSE_BY_CATEGORIES':
-      response = await chatbotService.handleBrowseByCategories(sender_psid, payload.categoryId, payload.categoryRank);
+      response = await homeController.handleBrowseByCategories(sender_psid, payload.categoryId, payload.categoryRank);
       return;
     default:
       response = { text: `Mình chưa biết phản hồi lệnh '${payload}' này của bạn 😭😭😭.` };
@@ -126,7 +126,7 @@ async function handlePostback(sender_psid, received_postback) {
   }
 
   // Send the message to acknowledge the postback
-  chatbotService.callSendAPI(sender_psid, response);
+  homeController.callSendAPI(sender_psid, response);
 }
 
 export async function setupProfile(req, res) {
