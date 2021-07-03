@@ -132,4 +132,44 @@ async function handlePostback(sender_psid, received_postback) {
     chatbotService.callSendAPI(sender_psid, response);
 }
 
+export async function setupProfile(req, res) {
+    const request_body = {
+        "get_started": {
+            payload: JSON.stringify({ type: "GET_STARTED" })
+        },
+        "whitelisted_domains": ["https://git.heroku.com/online-courses-chatbot.git"],
+        "persistent_menu": [
+            {
+                "locale": "default",
+                "composer_input_disabled": false,
+                "call_to_actions": [
+                    {
+                        "type": "web_url",
+                        "title": "Đến trang web",
+                        "url": WEB_DOMAIN,
+                        "webview_height_ratio": "full"
+                    },
+                    {
+                        "type": "postback",
+                        "title": "Khởi động lại chatbot",
+                        "payload": JSON.stringify({ type: "RESTART_BOT" })
+                    }
+                ]
+            }
+        ]
+    };
 
+    request({
+        "uri": `https://graph.facebook.com/v11.0/me/messenger_profile?access_token=${PAGE_ACCESS_TOKEN}`,
+        "qs": { "access_token": PAGE_ACCESS_TOKEN },
+        "method": "POST",
+        "json": request_body
+    }, (err, noNeedRes, body) => {
+        res.send(body);
+        if (!err) {
+            console.log('Setup FB user profile SUCCESS');
+        } else {
+            console.error("Setup FB user profile FAIL:" + err);
+        }
+    });
+}

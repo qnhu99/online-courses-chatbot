@@ -87,6 +87,32 @@ function getGetStartedMessage() {
   }
 }
 
+function handleBrowseMostViewCourses(sender_psid) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const [courses, coursesErr] = await getMostViewCourses();
+
+      let response;
+      if (coursesErr) {
+        response = {
+          "text": INTERNAL_ERROR_MESSAGE
+        }
+      } else if (courses.length === 0) {
+        response = {
+          "text": "Không có khóa học để hiển thị."
+        }
+      } else {
+        response = getResponseFromCourses(courses);
+      }
+
+      await callSendAPI(sender_psid, response);
+
+      resolve('success');
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
 function handleGetStarted(sender_psid) {
   return new Promise(async (resolve, reject) => {
@@ -103,8 +129,24 @@ function handleGetStarted(sender_psid) {
   });
 }
 
+function getCategories(categoryId) {
+  return new Promise((resolve) => {
+    const url = `${API_DOMAIN}/api/categories/${categoryId ? categoryId : ''}`;
 
-
+    request({
+      "uri": url,
+      "qs": { "limit": 50 },
+      "method": "GET",
+    }, (err, res, body) => {
+      body = JSON.parse(body);
+      let result = [categoryId ? body?.data?.categories : body?.data?.rows, err];
+      if (!result[0]) {
+        result[0] = [];
+      }
+      resolve(result);
+    });
+  });
+}
 
 
 
