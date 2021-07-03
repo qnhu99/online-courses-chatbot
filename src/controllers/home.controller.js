@@ -72,10 +72,6 @@ function getGetStartedMessage() {
                                 "payload": JSON.stringify({ type: "FIND_COURSE" })
                             }, {
                                 "type": "postback",
-                                "title": "Xem nhiều nhất",
-                                "payload": JSON.stringify({ type: "BROWSE_MOST_VIEW_COURSE" })
-                            }, {
-                                "type": "postback",
                                 "title": "Xem theo thể loại",
                                 "payload": JSON.stringify({ type: "BROWSE_BY_CATEGORIES" })
                             }
