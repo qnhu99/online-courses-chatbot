@@ -1,14 +1,14 @@
 import express from "express";
-import * as chatbotService from '../services/chatbot.service'
+import * as homeController from "../controllers/home.controller";
 
 let router = express.Router();
 
 export default app => {
-    router.get("/", chatbotService.getHomePage);
+    router.get("/", homeController.getHomePage);
 
-    router.post("/setup-profile", chatbotService.setupProfile);
+    router.post("/setup-profile", homeController.setupProfile);
 
-    router.post('/webhook', chatbotService.postWebhook);
-    router.get('/webhook', chatbotService.getWebhook);
+    router.post('/webhook', homeController.postWebhook);
+    router.get('/webhook', homeController.getWebhook);
     return app.use('/', router);
 }
