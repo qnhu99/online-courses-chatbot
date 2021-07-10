@@ -329,9 +329,7 @@ function handleSearchCourses(sender_psid, searchKeyWords) {
           "text": "Không có khóa học để hiển thị T_T"
         }
       } else {
-        response = {
-          text: ``
-        }
+        response = getResponseFromCourses(courses);
       }
 
       await callSendAPI(sender_psid, response);
